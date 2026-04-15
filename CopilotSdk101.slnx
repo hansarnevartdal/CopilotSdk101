@@ -4,4 +4,5 @@
   <Project Path="3-StructuredOutput/3-StructuredOutput.csproj" />
   <Project Path="4-MultiToolAgent/4-MultiToolAgent.csproj" />
   <Project Path="5-ConversationalAgent/5-ConversationalAgent.csproj" />
+  <Project Path="6-PermissionHandling/6-PermissionHandling.csproj" />
 </Solution>

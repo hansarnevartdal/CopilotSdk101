@@ -55,6 +55,15 @@ cd 5-ConversationalAgent
 dotnet run
 ```
 
+### 6 — Permission Handling and Human-in-the-Loop
+
+Replace `PermissionHandler.ApproveAll` with a custom `OnPermissionRequest` callback that pauses before file reads and writes. This example uses a temporary demo workspace, lets the user approve or reject each action, and supports conditional approvals for future reads or writes.
+
+```
+cd 6-PermissionHandling
+dotnet run
+```
+
 ## Key Concepts
 
 | Concept | Where |
@@ -71,3 +80,6 @@ dotnet run
 | Multiple custom tools in one session | Example 4 |
 | Agent-selected tool chaining | Example 4 |
 | Tool execution events for observability | Example 4 |
+| Custom `OnPermissionRequest` handling | Example 6 |
+| Human-in-the-loop approvals | Example 6 |
+| Selective permission rules | Example 6 |
