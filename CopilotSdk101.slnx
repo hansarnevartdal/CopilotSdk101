@@ -3,4 +3,5 @@
   <Project Path="2-BringYourOwnInstructions/2-BringYourOwnInstructions.csproj" />
   <Project Path="3-StructuredOutput/3-StructuredOutput.csproj" />
   <Project Path="4-MultiToolAgent/4-MultiToolAgent.csproj" />
+  <Project Path="5-ConversationalAgent/5-ConversationalAgent.csproj" />
 </Solution>
