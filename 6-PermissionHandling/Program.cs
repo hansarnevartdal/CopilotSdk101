@@ -255,7 +255,7 @@ static string BuildPreview(string? diff, string? newFileContents)
 static string BuildLinePreview(string text)
 {
     var lines = text.Replace("\r", string.Empty)
-        .Split('\n', StringSplitOptions.TrimEntries)
+        .Split('\n')
         .Take(MaxPreviewLines + 1)
         .ToList();
 
@@ -288,7 +288,12 @@ static void ShowDemoFileSnapshot(string demoFilePath)
 
 static string PrepareDemoWorkspace()
 {
-    var workspacePath = Path.Combine(Path.GetTempPath(), "CopilotSdk101", "PermissionHandlingDemo");
+    var workspacePath = Path.Combine(
+        Path.GetTempPath(),
+        "CopilotSdk101",
+        "PermissionHandlingDemo",
+        Guid.NewGuid().ToString("N"));
+
     Directory.CreateDirectory(workspacePath);
 
     File.WriteAllText(
@@ -326,6 +331,9 @@ static string PrepareDemoWorkspace()
 sealed class PermissionPolicy
 {
     private readonly object gate = new();
+    private readonly StringComparison pathComparison = OperatingSystem.IsWindows()
+        ? StringComparison.OrdinalIgnoreCase
+        : StringComparison.Ordinal;
 
     private bool autoApproveReads;
     private bool autoApproveTargetWrites;
@@ -359,7 +367,7 @@ sealed class PermissionPolicy
 
         lock (gate)
         {
-            return autoApproveTargetWrites && string.Equals(fullPath, TargetFilePath, StringComparison.OrdinalIgnoreCase);
+            return autoApproveTargetWrites && string.Equals(fullPath, TargetFilePath, pathComparison);
         }
     }
 
@@ -372,7 +380,7 @@ sealed class PermissionPolicy
     public bool CanConditionallyApproveWrite(string path)
     {
         var fullPath = ResolvePath(path);
-        return string.Equals(fullPath, TargetFilePath, StringComparison.OrdinalIgnoreCase);
+        return string.Equals(fullPath, TargetFilePath, pathComparison);
     }
 
     public void EnableReadAutoApproval()
@@ -396,7 +404,7 @@ sealed class PermissionPolicy
         var normalizedRoot = WorkspacePath.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)
             + Path.DirectorySeparatorChar;
 
-        return fullPath.StartsWith(normalizedRoot, StringComparison.OrdinalIgnoreCase);
+        return fullPath.StartsWith(normalizedRoot, pathComparison);
     }
 
     private string ResolvePath(string path)
