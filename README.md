@@ -37,6 +37,15 @@ cd 3-StructuredOutput
 dotnet run
 ```
 
+### 4 — Multi-Tool Agent
+
+Register multiple custom tools on one session and let the agent decide how to chain them together. This example exposes `search_files`, `read_file`, and `summarize_findings`, then logs tool execution events so you can watch the agent discover files, inspect them, and submit a markdown summary.
+
+```
+cd 4-MultiToolAgent
+dotnet run
+```
+
 ### 5 — Conversational Agent with Session History
 
 Reuse a single Copilot session across multiple turns so the agent remembers earlier context. This example runs a guided three-turn code-review conversation, streams every response, and then keeps the same session open for additional follow-up prompts.
@@ -59,3 +68,6 @@ dotnet run
 | Multi-turn session reuse | Example 5 |
 | Repeated `SendAsync` calls with context | Example 5 |
 | Interactive follow-up prompts | Example 5 |
+| Multiple custom tools in one session | Example 4 |
+| Agent-selected tool chaining | Example 4 |
+| Tool execution events for observability | Example 4 |
