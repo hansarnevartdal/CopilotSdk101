@@ -1,6 +1,6 @@
 # Copilot SDK 101
 
-Three progressive examples showing how to use the [GitHub Copilot SDK](https://www.nuget.org/packages/GitHub.Copilot.SDK) from .NET to build agentic coding tools.
+Progressive examples showing how to use the [GitHub Copilot SDK](https://www.nuget.org/packages/GitHub.Copilot.SDK) from .NET to build agentic coding tools.
 
 ## Prerequisites
 
@@ -37,6 +37,15 @@ cd 3-StructuredOutput
 dotnet run
 ```
 
+### 5 — Conversational Agent with Session History
+
+Reuse a single Copilot session across multiple turns so the agent remembers earlier context. This example runs a guided three-turn code-review conversation, streams every response, and then keeps the same session open for additional follow-up prompts.
+
+```
+cd 5-ConversationalAgent
+dotnet run
+```
+
 ## Key Concepts
 
 | Concept | Where |
@@ -47,3 +56,6 @@ dotnet run
 | Streaming responses via events | Examples 1 & 2 |
 | Structured output via `AIFunction` tools | Example 3 |
 | `SendAndWaitAsync` (single-shot) | Example 3 |
+| Multi-turn session reuse | Example 5 |
+| Repeated `SendAsync` calls with context | Example 5 |
+| Interactive follow-up prompts | Example 5 |

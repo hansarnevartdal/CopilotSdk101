@@ -2,4 +2,5 @@
   <Project Path="1-RepoInstructions/1-RepoInstructions.csproj" />
   <Project Path="2-BringYourOwnInstructions/2-BringYourOwnInstructions.csproj" />
   <Project Path="3-StructuredOutput/3-StructuredOutput.csproj" />
+  <Project Path="5-ConversationalAgent/5-ConversationalAgent.csproj" />
 </Solution>
