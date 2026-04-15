@@ -1,4 +1,4 @@
-# Copilot SDK 101
+![Copilot SDK 101](logo.png)
 
 Progressive examples showing how to use the [GitHub Copilot SDK](https://www.nuget.org/packages/GitHub.Copilot.SDK) from .NET to build agentic coding tools.
 
@@ -10,9 +10,9 @@ Progressive examples showing how to use the [GitHub Copilot SDK](https://www.nug
 
 ## Examples
 
-### 1 — Repo Instructions
+### 1 — Use Existing Repo Instructions
 
-The simplest starting point. Point `CopilotClient` at a git repo and it automatically discovers `.github/copilot-instructions.md` and skills — no extra config needed.
+The simplest starting point. Point `CopilotClient` at a git repo and it automatically discovers the repo's existing `.github/copilot-instructions.md` and skills — no extra config needed.
 
 ```
 cd 1-RepoInstructions
@@ -28,9 +28,9 @@ cd 2-BringYourOwnInstructions
 dotnet run
 ```
 
-### 3 — Structured Output
+### 3 — Structured Output with Custom Tools
 
-Use `AIFunctionFactory` to define a tool the agent *must* call, turning free-form LLM output into a strongly-typed C# object (`SecurityResult`). The agent analyzes a repo and reports findings through the tool.
+Use `AIFunctionFactory` to define a custom tool the agent *must* call, turning free-form LLM output into a strongly-typed C# object (`SecurityResult`). The agent analyzes a repo and reports findings through the tool.
 
 ```
 cd 3-StructuredOutput
