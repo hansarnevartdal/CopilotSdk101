@@ -18,14 +18,7 @@ var searchFilesTool = AIFunctionFactory.Create(
      string pattern) =>
     {
         var normalizedPattern = NormalizePath(pattern);
-        var matches = Directory
-            .EnumerateFiles(repoPath, "*", new EnumerationOptions
-            {
-                IgnoreInaccessible = true,
-                RecurseSubdirectories = true,
-                ReturnSpecialDirectories = false,
-            })
-            .Select(path => NormalizePath(Path.GetRelativePath(repoPath, path)))
+        var matches = EnumerateSearchableFiles(repoPath)
             .Where(relativePath => !IsIgnoredPath(relativePath))
             .Where(relativePath => FileSystemName.MatchesSimpleExpression(normalizedPattern, relativePath, ignoreCase: true))
             .OrderBy(path => path, StringComparer.OrdinalIgnoreCase)
@@ -41,8 +34,11 @@ var searchFilesTool = AIFunctionFactory.Create(
         var visibleMatches = wasTrimmed ? matches.Take(MaxSearchResults).ToList() : matches;
         var lines = string.Join(Environment.NewLine, visibleMatches.Select(path => $"- {path}"));
         var suffix = wasTrimmed ? $"{Environment.NewLine}- ... more matches omitted" : string.Empty;
+        var summary = wasTrimmed
+            ? $"Found more than {MaxSearchResults} match(es) for `{pattern}`:"
+            : $"Found {visibleMatches.Count} match(es) for `{pattern}`:";
 
-        return $"Found {matches.Count - (wasTrimmed ? 1 : 0)} match(es) for `{pattern}`:{Environment.NewLine}{lines}{suffix}";
+        return $"{summary}{Environment.NewLine}{lines}{suffix}";
     },
     "search_files",
     "Search the repository for files whose relative path matches a wildcard pattern.");
@@ -52,25 +48,23 @@ var readFileTool = AIFunctionFactory.Create(
      string relativePath) =>
     {
         var normalizedRelativePath = NormalizePath(relativePath);
-        var fullPath = Path.GetFullPath(Path.Combine(repoPath, normalizedRelativePath.Replace('/', Path.DirectorySeparatorChar)));
-
-        if (!fullPath.StartsWith(repoPath, StringComparison.OrdinalIgnoreCase))
-        {
-            throw new InvalidOperationException("Only files inside the configured repository can be read.");
-        }
+        var fullPath = ResolveRepoFilePath(repoPath, normalizedRelativePath);
 
         if (!File.Exists(fullPath))
         {
             throw new FileNotFoundException("The requested file does not exist.", normalizedRelativePath);
         }
 
-        var lines = File.ReadAllLines(fullPath);
-        var preview = lines
-            .Take(MaxFileLines)
+        var previewLines = File.ReadLines(fullPath)
+            .Take(MaxFileLines + 1)
+            .ToList();
+        var wasTruncated = previewLines.Count > MaxFileLines;
+        var visibleLines = wasTruncated ? previewLines.Take(MaxFileLines) : previewLines;
+        var preview = visibleLines
             .Select((line, index) => $"{index + 1}. {line}");
 
-        var truncatedNotice = lines.Length > MaxFileLines
-            ? $"{Environment.NewLine}... {lines.Length - MaxFileLines} more line(s) omitted."
+        var truncatedNotice = wasTruncated
+            ? $"{Environment.NewLine}... more line(s) omitted after line {MaxFileLines}."
             : string.Empty;
 
         return $"# {NormalizePath(Path.GetRelativePath(repoPath, fullPath))}{Environment.NewLine}{string.Join(Environment.NewLine, preview)}{truncatedNotice}";
@@ -202,10 +196,71 @@ static string FormatArguments(object? arguments)
     return string.IsNullOrWhiteSpace(text) ? string.Empty : text;
 }
 
-static bool IsIgnoredPath(string relativePath) =>
-    relativePath.StartsWith(".git/", StringComparison.OrdinalIgnoreCase)
-    || relativePath.Contains("/bin/", StringComparison.OrdinalIgnoreCase)
-    || relativePath.Contains("/obj/", StringComparison.OrdinalIgnoreCase);
+static IEnumerable<string> EnumerateSearchableFiles(string repoPath)
+{
+    var pendingDirectories = new Stack<string>();
+    var enumerationOptions = new EnumerationOptions
+    {
+        IgnoreInaccessible = true,
+        ReturnSpecialDirectories = false,
+    };
+
+    pendingDirectories.Push(repoPath);
+
+    while (pendingDirectories.Count > 0)
+    {
+        var currentDirectory = pendingDirectories.Pop();
+
+        foreach (var subdirectory in Directory.EnumerateDirectories(currentDirectory, "*", enumerationOptions))
+        {
+            var relativeDirectory = NormalizePath(Path.GetRelativePath(repoPath, subdirectory));
+            if (!IsIgnoredDirectory(relativeDirectory))
+            {
+                pendingDirectories.Push(subdirectory);
+            }
+        }
+
+        foreach (var filePath in Directory.EnumerateFiles(currentDirectory, "*", enumerationOptions))
+        {
+            var relativeFile = NormalizePath(Path.GetRelativePath(repoPath, filePath));
+            if (!IsIgnoredPath(relativeFile))
+            {
+                yield return relativeFile;
+            }
+        }
+    }
+}
+
+static string ResolveRepoFilePath(string repoPath, string relativePath)
+{
+    var fullPath = Path.GetFullPath(Path.Combine(repoPath, relativePath.Replace('/', Path.DirectorySeparatorChar)));
+    var relativeToRepo = Path.GetRelativePath(repoPath, fullPath);
+    var normalizedRelativeToRepo = NormalizePath(relativeToRepo);
+
+    if (Path.IsPathRooted(relativeToRepo)
+        || normalizedRelativeToRepo.Equals("..", StringComparison.Ordinal)
+        || normalizedRelativeToRepo.StartsWith("../", StringComparison.Ordinal))
+    {
+        throw new InvalidOperationException("Only files inside the configured repository can be read.");
+    }
+
+    return fullPath;
+}
+
+static bool IsIgnoredDirectory(string relativePath) => HasIgnoredDirectorySegment(relativePath);
+
+static bool IsIgnoredPath(string relativePath) => HasIgnoredDirectorySegment(relativePath);
+
+static bool HasIgnoredDirectorySegment(string relativePath)
+{
+    var segments = NormalizePath(relativePath)
+        .Split('/', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+
+    return segments.Any(segment =>
+        segment.Equals(".git", StringComparison.OrdinalIgnoreCase)
+        || segment.Equals("bin", StringComparison.OrdinalIgnoreCase)
+        || segment.Equals("obj", StringComparison.OrdinalIgnoreCase));
+}
 
 static string NormalizePath(string path) => path.Replace('\\', '/');
 
