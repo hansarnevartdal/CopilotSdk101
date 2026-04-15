@@ -44,33 +44,7 @@ var guidedTurns = new (string Title, string Prompt)[]
         "Based on the improvement you recommended in the previous turns, draft the exact comment or console text you would change in 1-RepoInstructions/Program.cs, but do not modify files."
     ),
 };
-
-var turnCompleted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-var waitingForTurn = false;
-
-using var subscription = session.On(evt =>
-{
-    switch (evt)
-    {
-        case AssistantMessageDeltaEvent delta:
-            Console.Write(delta.Data.DeltaContent);
-            break;
-        case SessionErrorEvent error:
-            if (waitingForTurn)
-            {
-                turnCompleted.TrySetException(new InvalidOperationException(error.Data?.ToString() ?? "The session reported an error."));
-            }
-
-            Console.WriteLine($"\n[ERROR] {error.Data}");
-            break;
-        case SessionIdleEvent:
-            if (waitingForTurn)
-            {
-                turnCompleted.TrySetResult();
-            }
-            break;
-    }
-});
+var guidedDemoHasRun = false;
 
 Console.WriteLine("=== Copilot SDK — Conversational Agent with Session History ===");
 Console.WriteLine($"Target repo: {repoPath}");
@@ -90,10 +64,19 @@ if (startupChoice?.Equals("exit", StringComparison.OrdinalIgnoreCase) == true)
 if (!string.Equals(startupChoice, "skip", StringComparison.OrdinalIgnoreCase))
 {
     await RunGuidedDemoAsync();
+    guidedDemoHasRun = true;
 }
 
 Console.WriteLine("The session is still live, so you can keep asking follow-up questions.");
-Console.WriteLine("Try referencing the earlier discussion about 1-RepoInstructions/Program.cs.");
+if (guidedDemoHasRun)
+{
+    Console.WriteLine("Try referencing the earlier discussion about 1-RepoInstructions/Program.cs.");
+}
+else
+{
+    Console.WriteLine("Try asking the agent to review 1-RepoInstructions/Program.cs and then follow up on its recommendation.");
+}
+
 Console.WriteLine("Type 'demo' to rerun the guided conversation or 'exit' to quit.\n");
 
 while (true)
@@ -114,6 +97,7 @@ while (true)
     if (prompt.Equals("demo", StringComparison.OrdinalIgnoreCase))
     {
         await RunGuidedDemoAsync();
+        guidedDemoHasRun = true;
         continue;
     }
 
@@ -140,18 +124,27 @@ async Task RunTurnAsync(string title, string prompt)
     Console.WriteLine($"User: {prompt}");
     Console.Write("Assistant: ");
 
-    turnCompleted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-    waitingForTurn = true;
+    var turnCompleted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
 
-    try
+    using var subscription = session.On(evt =>
     {
-        await session.SendAsync(new MessageOptions { Prompt = prompt });
-        await turnCompleted.Task;
-    }
-    finally
-    {
-        waitingForTurn = false;
-    }
+        switch (evt)
+        {
+            case AssistantMessageDeltaEvent delta:
+                Console.Write(delta.Data.DeltaContent);
+                break;
+            case SessionErrorEvent error:
+                Console.WriteLine($"\n[ERROR] {error.Data}");
+                turnCompleted.TrySetResult();
+                break;
+            case SessionIdleEvent:
+                turnCompleted.TrySetResult();
+                break;
+        }
+    });
+
+    await session.SendAsync(new MessageOptions { Prompt = prompt });
+    await turnCompleted.Task;
 
     Console.WriteLine("\n");
 }
