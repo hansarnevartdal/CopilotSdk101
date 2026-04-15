@@ -1,6 +1,6 @@
 # Copilot SDK 101
 
-Three progressive examples showing how to use the [GitHub Copilot SDK](https://www.nuget.org/packages/GitHub.Copilot.SDK) from .NET to build agentic coding tools.
+Four progressive examples showing how to use the [GitHub Copilot SDK](https://www.nuget.org/packages/GitHub.Copilot.SDK) from .NET to build agentic coding tools.
 
 ## Prerequisites
 
@@ -37,6 +37,15 @@ cd 3-StructuredOutput
 dotnet run
 ```
 
+### 4 — Multi-Tool Agent
+
+Register multiple custom tools on one session and let the agent decide how to chain them together. This example exposes `search_files`, `read_file`, and `summarize_findings`, then logs tool execution events so you can watch the agent discover files, inspect them, and submit a markdown summary.
+
+```
+cd 4-MultiToolAgent
+dotnet run
+```
+
 ## Key Concepts
 
 | Concept | Where |
@@ -47,3 +56,6 @@ dotnet run
 | Streaming responses via events | Examples 1 & 2 |
 | Structured output via `AIFunction` tools | Example 3 |
 | `SendAndWaitAsync` (single-shot) | Example 3 |
+| Multiple custom tools in one session | Example 4 |
+| Agent-selected tool chaining | Example 4 |
+| Tool execution events for observability | Example 4 |
