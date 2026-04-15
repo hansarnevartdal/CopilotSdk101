@@ -46,6 +46,15 @@ cd 4-MultiToolAgent
 dotnet run
 ```
 
+### 5 — Conversational Agent with Session History
+
+Reuse a single Copilot session across multiple turns so the agent remembers earlier context. This example runs a guided three-turn code-review conversation, streams every response, and then keeps the same session open for additional follow-up prompts.
+
+```
+cd 5-ConversationalAgent
+dotnet run
+```
+
 ### 6 — Permission Handling and Human-in-the-Loop
 
 Replace `PermissionHandler.ApproveAll` with a custom `OnPermissionRequest` callback that pauses before file reads and writes. This example uses a temporary demo workspace, lets the user approve or reject each action, and supports conditional approvals for future reads or writes.
@@ -65,6 +74,9 @@ dotnet run
 | Streaming responses via events | Examples 1 & 2 |
 | Structured output via `AIFunction` tools | Example 3 |
 | `SendAndWaitAsync` (single-shot) | Example 3 |
+| Multi-turn session reuse | Example 5 |
+| Repeated `SendAsync` calls with context | Example 5 |
+| Interactive follow-up prompts | Example 5 |
 | Multiple custom tools in one session | Example 4 |
 | Agent-selected tool chaining | Example 4 |
 | Tool execution events for observability | Example 4 |
