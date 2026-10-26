@@ -2,7 +2,8 @@
 // The sample uses a temporary workspace so you can safely approve or reject file operations.
 
 using System.Text;
-using GitHub.Copilot.SDK;
+using GitHub.Copilot;
+using GitHub.Copilot.Rpc;
 
 const int MaxPreviewLines = 24;
 
@@ -12,13 +13,12 @@ var permissionPolicy = new PermissionPolicy(demoWorkspacePath, demoFilePath);
 
 await using var client = new CopilotClient(new CopilotClientOptions
 {
-    Cwd = demoWorkspacePath,
+    WorkingDirectory = demoWorkspacePath,
 });
 
 await using var session = await client.CreateSessionAsync(new SessionConfig
 {
-    Model = "gpt-5.4",
-    ReasoningEffort = "low",
+    Model = Environment.GetEnvironmentVariable("COPILOT_MODEL"),
     Streaming = true,
     OnPermissionRequest = (request, _) => Task.FromResult(HandlePermission(request, permissionPolicy)),
     SystemMessage = new SystemMessageConfig
@@ -33,7 +33,7 @@ await using var session = await client.CreateSessionAsync(new SessionConfig
     },
 });
 
-using var subscription = session.On(evt =>
+using var subscription = session.On<SessionEvent>(evt =>
 {
     switch (evt)
     {
@@ -70,7 +70,7 @@ while (true)
     Console.Write("> ");
     var prompt = Console.ReadLine();
 
-    if (string.Equals(prompt, "exit", StringComparison.OrdinalIgnoreCase))
+    if (prompt is null || string.Equals(prompt, "exit", StringComparison.OrdinalIgnoreCase))
     {
         break;
     }
@@ -92,7 +92,9 @@ while (true)
 
 return;
 
-static PermissionRequestResult HandlePermission(PermissionRequest request, PermissionPolicy permissionPolicy)
+// SDK 1.0.26 exposes callback decisions through its experimental RPC namespace.
+#pragma warning disable GHCP001
+static PermissionDecision HandlePermission(PermissionRequest request, PermissionPolicy permissionPolicy)
 {
     ArgumentNullException.ThrowIfNull(request);
     ArgumentNullException.ThrowIfNull(permissionPolicy);
@@ -103,30 +105,23 @@ static PermissionRequestResult HandlePermission(PermissionRequest request, Permi
         Console.WriteLine("[permission] Denied shell command by rule.");
         Console.WriteLine($"Command: {shell.FullCommandText}");
 
-        return new PermissionRequestResult
-        {
-            Kind = PermissionRequestResultKind.DeniedByRules,
-        };
+        return PermissionDecision.Reject("Shell commands are disabled in this demo.");
     }
 
-    if (request is PermissionRequestRead read && permissionPolicy.ShouldAutoApproveRead(read.Path))
+    if (request.ManagedApprovalRequired is not true
+        && request is PermissionRequestRead read && permissionPolicy.ShouldAutoApproveRead(read.Path))
     {
         Console.WriteLine($"\n[permission] Auto-approved read: {read.Path}");
 
-        return new PermissionRequestResult
-        {
-            Kind = PermissionRequestResultKind.Approved,
-        };
+        return PermissionDecision.ApproveOnce();
     }
 
-    if (request is PermissionRequestWrite write && permissionPolicy.ShouldAutoApproveWrite(write.FileName))
+    if (request.ManagedApprovalRequired is not true
+        && request is PermissionRequestWrite write && permissionPolicy.ShouldAutoApproveWrite(write.FileName))
     {
         Console.WriteLine($"\n[permission] Auto-approved write: {write.FileName}");
 
-        return new PermissionRequestResult
-        {
-            Kind = PermissionRequestResultKind.Approved,
-        };
+        return PermissionDecision.ApproveOnce();
     }
 
     while (true)
@@ -136,12 +131,14 @@ static PermissionRequestResult HandlePermission(PermissionRequest request, Permi
         Console.WriteLine(DescribeRequest(request));
         Console.WriteLine("Choose: [a] approve once  [d] deny once");
 
-        if (request is PermissionRequestRead readRequest && permissionPolicy.CanConditionallyApproveRead(readRequest.Path))
+        if (request.ManagedApprovalRequired is not true
+            && request is PermissionRequestRead readRequest && permissionPolicy.CanConditionallyApproveRead(readRequest.Path))
         {
             Console.WriteLine("        [r] approve this read and future reads inside the demo workspace");
         }
 
-        if (request is PermissionRequestWrite writeRequest && permissionPolicy.CanConditionallyApproveWrite(writeRequest.FileName))
+        if (request.ManagedApprovalRequired is not true
+            && request is PermissionRequestWrite writeRequest && permissionPolicy.CanConditionallyApproveWrite(writeRequest.FileName))
         {
             Console.WriteLine("        [w] approve this write and future writes to DemoGreeter.cs");
         }
@@ -152,39 +149,33 @@ static PermissionRequestResult HandlePermission(PermissionRequest request, Permi
         switch (input)
         {
             case "a":
-                return new PermissionRequestResult
-                {
-                    Kind = PermissionRequestResultKind.Approved,
-                };
+                return new PermissionDecisionApproveOnce { ApprovedInteractively = true };
             case "d":
-                return new PermissionRequestResult
-                {
-                    Kind = PermissionRequestResultKind.DeniedInteractivelyByUser,
-                };
-            case "r" when request is PermissionRequestRead conditionalRead
+                return PermissionDecision.Reject("The user denied this request.");
+            case null:
+                return PermissionDecision.UserNotAvailable();
+            case "r" when request.ManagedApprovalRequired is not true
+                           && request is PermissionRequestRead conditionalRead
                            && permissionPolicy.CanConditionallyApproveRead(conditionalRead.Path):
                 permissionPolicy.EnableReadAutoApproval();
                 Console.WriteLine("[permission] Future reads in the demo workspace will be auto-approved.");
 
-                return new PermissionRequestResult
-                {
-                    Kind = PermissionRequestResultKind.Approved,
-                };
-            case "w" when request is PermissionRequestWrite conditionalWrite
+                return new PermissionDecisionApproveOnce { ApprovedInteractively = true };
+            case "w" when request.ManagedApprovalRequired is not true
+                           && request is PermissionRequestWrite conditionalWrite
                            && permissionPolicy.CanConditionallyApproveWrite(conditionalWrite.FileName):
                 permissionPolicy.EnableTargetWriteAutoApproval();
                 Console.WriteLine("[permission] Future writes to DemoGreeter.cs will be auto-approved.");
 
-                return new PermissionRequestResult
-                {
-                    Kind = PermissionRequestResultKind.Approved,
-                };
+                return new PermissionDecisionApproveOnce { ApprovedInteractively = true };
             default:
                 Console.WriteLine("Please enter one of the listed permission choices.");
                 break;
         }
     }
 }
+
+#pragma warning restore GHCP001
 
 static string DescribeRequest(PermissionRequest request)
 {

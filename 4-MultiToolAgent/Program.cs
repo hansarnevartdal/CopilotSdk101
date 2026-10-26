@@ -3,7 +3,7 @@
 
 using System.ComponentModel;
 using System.IO.Enumeration;
-using GitHub.Copilot.SDK;
+using GitHub.Copilot;
 using Microsoft.Extensions.AI;
 
 const int MaxSearchResults = 20;
@@ -69,7 +69,7 @@ var readFileTool = AIFunctionFactory.Create(
 
         return $"# {NormalizePath(Path.GetRelativePath(repoPath, fullPath))}{Environment.NewLine}{string.Join(Environment.NewLine, preview)}{truncatedNotice}";
     },
-    "read_file",
+    "read_repo_file",
     "Read a text file from the repository using a repo-relative path.");
 
 var summarizeFindingsTool = AIFunctionFactory.Create(
@@ -84,16 +84,17 @@ var summarizeFindingsTool = AIFunctionFactory.Create(
 
 await using var client = new CopilotClient(new CopilotClientOptions
 {
-    Cwd = repoPath,
+    WorkingDirectory = repoPath,
 });
 
 await using var session = await client.CreateSessionAsync(new SessionConfig
 {
-    Model = "gpt-5.4",
-    ReasoningEffort = "low",
+    Model = Environment.GetEnvironmentVariable("COPILOT_MODEL"),
     Streaming = true,
     OnPermissionRequest = PermissionHandler.ApproveAll,
     Tools = [searchFilesTool, readFileTool, summarizeFindingsTool],
+    // Restrict the demo to our tools so the agent cannot bypass them with built-ins.
+    AvailableTools = ["custom:search_files", "custom:read_repo_file", "custom:summarize_findings"],
     SystemMessage = new SystemMessageConfig
     {
         Mode = SystemMessageMode.Append,
@@ -101,7 +102,7 @@ await using var session = await client.CreateSessionAsync(new SessionConfig
             You are demonstrating how a Copilot SDK session can orchestrate multiple custom tools.
             For repository exploration tasks, prefer this sequence when helpful:
             1. Use search_files to discover the relevant paths.
-            2. Use read_file on the most relevant matches.
+            2. Use read_repo_file on the most relevant matches.
             3. When you finish, you MUST call summarize_findings with a concise markdown summary.
             Keep the summary practical and reference the files you inspected.
             """,
@@ -110,13 +111,13 @@ await using var session = await client.CreateSessionAsync(new SessionConfig
 
 Console.WriteLine("=== Copilot SDK — Multi-Tool Agent ===");
 Console.WriteLine($"Target repo: {repoPath}");
-Console.WriteLine("Loaded tools: search_files, read_file, summarize_findings");
+Console.WriteLine("Loaded tools: search_files, read_repo_file, summarize_findings");
 Console.WriteLine("Press Enter to run the suggested prompt, type your own prompt, or type 'exit' to quit.\n");
 
 var suggestedPrompt = "Summarize the examples in this repository and recommend which sample a beginner should start with first.";
 Console.WriteLine($"Suggested prompt: {suggestedPrompt}\n");
 
-using var subscription = session.On(evt =>
+using var subscription = session.On<SessionEvent>(evt =>
 {
     switch (evt)
     {
@@ -149,7 +150,7 @@ while (true)
     Console.Write("> ");
     var prompt = Console.ReadLine();
 
-    if (prompt?.Equals("exit", StringComparison.OrdinalIgnoreCase) == true)
+    if (prompt is null || prompt.Equals("exit", StringComparison.OrdinalIgnoreCase))
     {
         break;
     }

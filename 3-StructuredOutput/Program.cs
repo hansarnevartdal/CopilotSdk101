@@ -1,15 +1,19 @@
 ﻿// Example 3: Structured output via custom tools.
 // Use an AIFunction as an "output schema" — the agent calls our tool with strongly typed data,
-// giving us a deterministic C# object instead of free-form text.
+// giving us a typed C# object when the agent calls the tool.
 
 using System.ComponentModel;
-using GitHub.Copilot.SDK;
+using GitHub.Copilot;
 using Microsoft.Extensions.AI;
 using StructuredOutput;
 
+var repoPath = args.Length > 0
+    ? Path.GetFullPath(args[0])
+    : Path.GetFullPath("../../../..", AppContext.BaseDirectory);
+
 SecurityResult? result = null;
 
-// Define a tool that the agent must call to "report" its findings.
+// Ask the agent to report through this tool; the prompt cannot guarantee a call.
 // The parameters become the structured output schema.
 var reportTool = AIFunctionFactory.Create(
     ([Description("Whether the repository is secure")] bool isSecure,
@@ -23,13 +27,12 @@ var reportTool = AIFunctionFactory.Create(
 
 await using var client = new CopilotClient(new CopilotClientOptions
 {
-    Cwd = @"C:\git\Examples\AgenticCodingLoop",
+    WorkingDirectory = repoPath,
 });
 
 await using var session = await client.CreateSessionAsync(new SessionConfig
 {
-    Model = "gpt-5.4",
-    ReasoningEffort = "low",
+    Model = Environment.GetEnvironmentVariable("COPILOT_MODEL"),
     Streaming = false, // We only care about the tool call, not streamed text
     OnPermissionRequest = PermissionHandler.ApproveAll,
     Tools = [reportTool],
@@ -46,7 +49,7 @@ await using var session = await client.CreateSessionAsync(new SessionConfig
 });
 
 Console.WriteLine("=== Copilot SDK — Structured Output ===");
-Console.WriteLine("Analyzing C:\\git\\Examples\\AgenticCodingLoop for security vulnerabilities...\n");
+Console.WriteLine($"Analyzing {repoPath} for security vulnerabilities...\n");
 
 // Single-shot: send the prompt and wait for the agent to finish (calls our tool)
 await session.SendAndWaitAsync(
