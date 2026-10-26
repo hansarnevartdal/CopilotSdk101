@@ -1,25 +1,32 @@
 ﻿// Example 1: Use the repo's .github instructions and skills automatically.
 // Point CopilotClient at a git repo and let it discover copilot-instructions.md and skills.
 
-using GitHub.Copilot.SDK;
+using GitHub.Copilot;
 
-// The Cwd tells the CLI where the repo lives — it auto-discovers .github/copilot-instructions.md
-// and .github/copilot/skills/ from that location.
+var repoPath = args.Length > 0
+    ? Path.GetFullPath(args[0])
+    : Path.GetFullPath("../../../..", AppContext.BaseDirectory);
+
+// WorkingDirectory selects the repo; EnableConfigDiscovery opts into its configuration and skills.
 await using var client = new CopilotClient(new CopilotClientOptions
 {
-    Cwd = @"C:\git\Examples\AgenticCodingLoop",
+    WorkingDirectory = repoPath,
 });
 
 await using var session = await client.CreateSessionAsync(new SessionConfig
 {
-    Model = "gpt-5.4",
-    ReasoningEffort = "low",
+    Model = Environment.GetEnvironmentVariable("COPILOT_MODEL"),
+    EnableConfigDiscovery = true,
+    // The standalone runtime has no extension launch provider; this sample loads repo configuration.
+#pragma warning disable GHCP001
+    RequestExtensions = false,
+#pragma warning restore GHCP001
     Streaming = true,
     OnPermissionRequest = PermissionHandler.ApproveAll,
 });
 
 Console.WriteLine("=== Copilot SDK — Repo Instructions ===");
-Console.WriteLine("Using .github config from C:\\git\\Examples\\AgenticCodingLoop");
+Console.WriteLine($"Using repository configuration from {repoPath}");
 Console.WriteLine("Type your prompt (or 'exit' to quit):\n");
 
 while (true)
@@ -29,23 +36,18 @@ while (true)
     if (string.IsNullOrWhiteSpace(prompt) || prompt.Equals("exit", StringComparison.OrdinalIgnoreCase))
         break;
 
-    var done = new TaskCompletionSource();
-
-    using var sub = session.On(evt =>
+    using var sub = session.On<SessionEvent>(evt =>
     {
         switch (evt)
         {
             case AssistantMessageDeltaEvent delta:
                 Console.Write(delta.Data.DeltaContent);
                 break;
-            case SessionIdleEvent:
-                done.TrySetResult();
-                break;
         }
     });
 
-    await session.SendAsync(new MessageOptions { Prompt = prompt });
-    await done.Task;
+    // Waiting for completion also works with streamed delta events.
+    await session.SendAndWaitAsync(prompt, timeout: TimeSpan.FromMinutes(5));
 
     Console.WriteLine("\n");
 }

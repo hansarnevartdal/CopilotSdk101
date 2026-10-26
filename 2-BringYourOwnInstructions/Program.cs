@@ -1,22 +1,25 @@
 ﻿// Example 2: Bring your own instructions and skills.
 // Inject a custom security-review skill and custom system instructions programmatically.
 
-using GitHub.Copilot.SDK;
+using GitHub.Copilot;
+
+var repoPath = args.Length > 0
+    ? Path.GetFullPath(args[0])
+    : Path.GetFullPath("../../../..", AppContext.BaseDirectory);
 
 await using var client = new CopilotClient(new CopilotClientOptions
 {
-    Cwd = @"C:\git\Examples\AgenticCodingLoop",
+    WorkingDirectory = repoPath,
 });
 
 await using var session = await client.CreateSessionAsync(new SessionConfig
 {
-    Model = "gpt-5.4",
-    ReasoningEffort = "low",
+    Model = Environment.GetEnvironmentVariable("COPILOT_MODEL"),
     Streaming = true,
     OnPermissionRequest = PermissionHandler.ApproveAll,
 
-    // Load custom skills from our own folder instead of the repo's .github/copilot/skills
-    SkillDirectories = ["./custom-config/skills/security-review"],
+    // Resolve explicit skill roots independently of the target repository's working directory.
+    SkillDirectories = [Path.Combine(AppContext.BaseDirectory, "custom-config", "skills")],
 
     // Append extra instructions to the default system prompt
     SystemMessage = new SystemMessageConfig
@@ -41,9 +44,7 @@ while (true)
     if (string.IsNullOrWhiteSpace(prompt) || prompt.Equals("exit", StringComparison.OrdinalIgnoreCase))
         break;
 
-    var done = new TaskCompletionSource();
-
-    using var sub = session.On(evt =>
+    using var sub = session.On<SessionEvent>(evt =>
     {
         switch (evt)
         {
@@ -52,16 +53,11 @@ while (true)
                 break;
             case SessionErrorEvent err:
                 Console.WriteLine($"\n[ERROR] {err.Data}");
-                done.TrySetResult();
-                break;
-            case SessionIdleEvent:
-                done.TrySetResult();
                 break;
         }
     });
 
-    await session.SendAsync(new MessageOptions { Prompt = prompt });
-    await done.Task;
+    await session.SendAndWaitAsync(prompt, timeout: TimeSpan.FromMinutes(5));
 
     Console.WriteLine("\n");
 }

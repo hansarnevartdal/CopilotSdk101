@@ -1,19 +1,18 @@
 // Example 5: Reuse one session across multiple turns so the agent remembers earlier context.
 // The guided demo shows a file review, a follow-up question, and a fix request in the same session.
 
-using GitHub.Copilot.SDK;
+using GitHub.Copilot;
 
 var repoPath = FindRepoRoot(AppContext.BaseDirectory);
 
 await using var client = new CopilotClient(new CopilotClientOptions
 {
-    Cwd = repoPath,
+    WorkingDirectory = repoPath,
 });
 
 await using var session = await client.CreateSessionAsync(new SessionConfig
 {
-    Model = "gpt-5.4",
-    ReasoningEffort = "low",
+    Model = Environment.GetEnvironmentVariable("COPILOT_MODEL"),
     Streaming = true,
     OnPermissionRequest = PermissionHandler.ApproveAll,
     SystemMessage = new SystemMessageConfig
@@ -49,14 +48,14 @@ var guidedDemoHasRun = false;
 Console.WriteLine("=== Copilot SDK — Conversational Agent with Session History ===");
 Console.WriteLine($"Target repo: {repoPath}");
 Console.WriteLine($"Session ID: {session.SessionId}");
-Console.WriteLine("This example reuses one session across multiple SendAsync calls.");
+Console.WriteLine("This example reuses one session across multiple SendAndWaitAsync calls.");
 Console.WriteLine("It starts with a guided three-turn demo: review a file, ask a follow-up, then request a fix.\n");
 Console.WriteLine("Press Enter to run the guided demo, type 'skip' to jump to freeform chat, or 'exit' to quit.\n");
 
 Console.Write("> ");
 var startupChoice = Console.ReadLine();
 
-if (startupChoice?.Equals("exit", StringComparison.OrdinalIgnoreCase) == true)
+if (startupChoice is null || startupChoice.Equals("exit", StringComparison.OrdinalIgnoreCase))
 {
     return;
 }
@@ -83,6 +82,11 @@ while (true)
 {
     Console.Write("> ");
     var prompt = Console.ReadLine();
+
+    if (prompt is null)
+    {
+        break;
+    }
 
     if (string.IsNullOrWhiteSpace(prompt))
     {
@@ -124,9 +128,7 @@ async Task RunTurnAsync(string title, string prompt)
     Console.WriteLine($"User: {prompt}");
     Console.Write("Assistant: ");
 
-    var turnCompleted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-
-    using var subscription = session.On(evt =>
+    using var subscription = session.On<SessionEvent>(evt =>
     {
         switch (evt)
         {
@@ -135,16 +137,11 @@ async Task RunTurnAsync(string title, string prompt)
                 break;
             case SessionErrorEvent error:
                 Console.WriteLine($"\n[ERROR] {error.Data}");
-                turnCompleted.TrySetResult();
-                break;
-            case SessionIdleEvent:
-                turnCompleted.TrySetResult();
                 break;
         }
     });
 
-    await session.SendAsync(new MessageOptions { Prompt = prompt });
-    await turnCompleted.Task;
+    await session.SendAndWaitAsync(prompt, timeout: TimeSpan.FromMinutes(5));
 
     Console.WriteLine("\n");
 }
